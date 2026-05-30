@@ -31,35 +31,63 @@
             max-width: 500px;
             text-align: center;
             background: white;
-            padding: 30px 20px;
+            padding: 25px 20px;
             border-radius: 20px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             box-sizing: border-box;
         }
-        h1 { color: #1f2937; margin-bottom: 25px; font-size: 26px; }
-        .status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; font-weight: bold; }
+        h1 { color: #1f2937; margin-bottom: 20px; font-size: 24px; }
+        .status-text { font-size: 13px; color: #6b7280; margin-bottom: 15px; font-weight: bold; }
         
-        /* עיצוב בחירת המצלמות */
-        .camera-select-container {
+        /* פאנל שליטה קומפקטי (מצלמה + מקלדת) */
+        .control-row {
+            display: flex;
+            gap: 10px;
             margin-bottom: 15px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .control-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             text-align: right;
         }
-        .camera-select-container label {
-            font-size: 13px;
+        .control-item label {
+            font-size: 11px;
             color: #4b5563;
-            display: block;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
             font-weight: bold;
         }
-        .cam-select {
+        .cam-select, .manual-input {
             width: 100%;
-            padding: 10px;
+            padding: 8px 10px;
             border-radius: 8px;
             border: 2px solid #1e3a8a;
-            font-size: 1rem;
+            font-size: 0.9rem;
             background-color: #f9fafb;
             color: #1f2937;
+            box-sizing: border-box;
+            height: 38px;
         }
+        
+        /* קבוצת הזנה ידנית קומפקטית */
+        .input-group {
+            display: flex;
+            gap: 4px;
+        }
+        .input-btn {
+            background-color: #1e3a8a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 12px;
+            cursor: pointer;
+            font-weight: bold;
+            height: 38px;
+            font-size: 1rem;
+        }
+        .input-btn:hover { background-color: #2563eb; }
 
         /* מסך הבית */
         #menu-screen { display: flex; flex-direction: column; gap: 15px; }
@@ -77,7 +105,7 @@
         /* כפתור החלפה מהירה בתחתית */
         .switch-btn {
             background-color: #f3f4f6; border: 2px solid #1e3a8a; color: #1e3a8a; padding: 12px 20px;
-            border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 20px; width: 100%;
+            border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 15px; width: 100%;
             font-size: 1rem;
         }
 
@@ -108,9 +136,19 @@
     <div id="scanner-screen" class="card">
         <h1 id="scanner-title">סורק</h1>
         
-        <div class="camera-select-container">
-            <label for="camera-select">🎥 בחר מצלמה אחורית חדה:</label>
-            <select id="camera-select" class="cam-select" onchange="onCameraChange()"></select>
+        <div class="control-row">
+            <div class="control-item" style="flex: 1.2;">
+                <label for="camera-select">🎥 בחר מצלמה:</label>
+                <select id="camera-select" class="cam-select" onchange="onCameraChange()"></select>
+            </div>
+            
+            <div class="control-item" style="flex: 1;">
+                <label for="manual-barcode">⌨️ הזנה ידנית:</label>
+                <div class="input-group">
+                    <input type="tel" id="manual-barcode" class="manual-input" placeholder="מ.א / קוד" pattern="[0-9]*">
+                    <button class="input-btn" onclick="submitManualCode()">➔</button>
+                </div>
+            </div>
         </div>
 
         <div id="status-text" class="status-text">טוען נתונים...</div>
@@ -136,146 +174,4 @@
         async function selectMode(mode) {
             currentMode = mode;
             document.getElementById('menu-screen').style.display = 'none';
-            document.getElementById('scanner-screen').style.display = 'block';
-            
-            await getAndPopulateCameras();
-            await updateUiAndLoad();
-        }
-
-        // גילוי מצלמות והזנתן לתפריט הבחירה
-        function getAndPopulateCameras() {
-            return new Promise((resolve) => {
-                Html5Qrcode.getCameras().then(cameras => {
-                    const selectEl = document.getElementById('camera-select');
-                    selectEl.innerHTML = ""; 
-
-                    if (cameras && cameras.length > 0) {
-                        cameras.forEach((camera, index) => {
-                            const option = document.createElement('option');
-                            option.value = camera.id;
-                            option.text = camera.label || `מצלמה ${index + 1}`;
-                            selectEl.appendChild(option);
-                        });
-                        
-                        selectEl.selectedIndex = cameras.length - 1;
-                        selectedCameraId = selectEl.value;
-                        
-                        startCamera(selectedCameraId).then(() => resolve());
-                    } else {
-                        document.getElementById('status-text').innerText = "⚠️ לא נמצאו מצלמות זמינות";
-                        resolve();
-                    }
-                }).catch(err => {
-                    document.getElementById('status-text').innerText = "⚠️ שגיאה בהרשאות המצלמה";
-                    resolve();
-                });
-            });
-        }
-
-        // הפעלת מצלמה ספציפית
-        function startCamera(cameraId) {
-            if (html5QrCode) {
-                return html5QrCode.stop().then(() => {
-                    html5QrCode = new Html5Qrcode("reader");
-                    return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
-                }).catch(() => {
-                    html5QrCode = new Html5Qrcode("reader");
-                    return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
-                });
-            } else {
-                html5QrCode = new Html5Qrcode("reader");
-                return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
-            }
-        }
-
-        // אירוע שינוי מצלמה ידני
-        async function onCameraChange() {
-            const selectEl = document.getElementById('camera-select');
-            selectedCameraId = selectEl.value;
-            document.getElementById('status-text').innerText = "מחליף מצלמה...";
-            await startCamera(selectedCameraId);
-            document.getElementById('status-text').innerText = "מוכן לסריקה!";
-        }
-
-        // החלפת רשימות ברקע
-        async function updateUiAndLoad() {
-            const switchBtn = document.getElementById('quick-switch-btn');
-            if (currentMode === 'beard') {
-                document.getElementById('scanner-title').innerText = "בדיקת פטור זקן";
-                switchBtn.innerText = "🔄 מעבר לבדיקת פטור שיער";
-                await loadData(urlBeardSheet);
-            } else {
-                document.getElementById('scanner-title').innerText = "בדיקת פטור שיער";
-                switchBtn.innerText = "🔄 מעבר לבדיקת פטור זקן";
-                await loadData(urlHairSheet);
-            }
-        }
-
-        // טעינת הנתונים מגוגל שיטס
-        async function loadData(url) {
-            if(!url || url.startsWith("הדבק_כאן")) {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את קישורי ה-Sheets בשורות 13-14";
-                return;
-            }
-            try {
-                const response = await fetch(url);
-                const data = await response.text();
-                
-                validBarcodes = data.split(/\r?\n/)
-                                    .map(line => line.trim())
-                                    .filter(line => line.length > 0);
-                
-                if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
-                    validBarcodes.shift();
-                }
-                document.getElementById('status-text').innerText = `מוכן! נטענו ${validBarcodes.length} רשומות.`;
-            } catch (error) {
-                document.getElementById('status-text').innerText = "❌ שגיאה בסנכרון מול גוגל שיטס";
-                console.error(error);
-            }
-        }
-
-        // מעבר מהיר
-        async function toggleMode() {
-            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
-            validBarcodes = [];
-            await updateUiAndLoad();
-        }
-
-        // פענוח הברקוד
-        function onScanSuccess(decodedText) {
-            if (isProcessing) return;
-            isProcessing = true;
-
-            const cleanCode = decodedText.trim();
-            const resultScreen = document.getElementById('result-screen');
-            const resultTitle = document.getElementById('result-title');
-            const resultSub = document.getElementById('result-sub');
-            const resultCode = document.getElementById('result-code');
-
-            const isType = (currentMode === 'beard') ? "פטור זקן" : "פטור שיער";
-
-            if (validBarcodes.includes(cleanCode)) {
-                resultScreen.style.backgroundColor = "#22c55e"; 
-                resultTitle.innerText = "פטור בתוקף";
-                resultSub.innerText = `מאושר: ${isType}`;
-            } else {
-                resultScreen.style.backgroundColor = "#ef4444"; 
-                resultTitle.innerText = "ללא פטור";
-                resultSub.innerText = `לא נמצא ברשימת ${isType}`;
-            }
-
-            resultCode.innerText = `מספר כרטיס: ${cleanCode}`;
-            resultScreen.style.display = 'flex';
-        }
-
-        // חזרה לסריקה הבאה
-        function resetScanner() {
-            document.getElementById('result-screen').style.display = 'none';
-            setTimeout(() => {
-                isProcessing = false;
-            }, 800);
-        }
-    </script>
-</body>
-</html>
+            document.getElementById('scanner-screen
