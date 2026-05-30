@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>בדיקת סטטוס פטור</title>
+    <title>מערכת בדיקת פטורים</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <style>
         body {
@@ -15,113 +15,158 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            /* 🔵 שינוי צבע הרקע הכללי לכחול נייבי עמוק */
             background-color: #0a192f; 
             transition: background-color 0.3s ease;
         }
-        #container {
+        .card {
             width: 90%;
             max-width: 500px;
             text-align: center;
-            /* ⚪ החלונית המרכזית נשארת לבנה */
             background: white;
             padding: 30px 20px;
             border-radius: 20px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-sizing: border-box;
         }
-        h1 { color: #1f2937; margin-bottom: 5px; font-size: 24px; }
-        #status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
-        #reader {
-            width: 100%;
-            border-radius: 10px;
-            overflow: hidden;
-            border: none !important;
-        }
-        /* עיצוב כפתורים מובנים של הספרייה */
-        #reader button {
-            background-color: #2563eb;
+        h1 { color: #1f2937; margin-bottom: 25px; font-size: 26px; }
+        .status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
+        
+        /* עיצוב מסך הבית - כפתורי בחירה גדולים */
+        #menu-screen { display: flex; flex-direction: column; gap: 15px; }
+        .menu-btn {
+            background-color: #1e3a8a;
             color: white;
             border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-        /* מסך תוצאה מלא שיקפוץ בצבע */
-        #result-screen {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            color: white;
-            text-align: center;
-        }
-        #result-title { font-size: 3.5rem; margin: 0; font-weight: bold; }
-        #result-code { font-size: 1.5rem; margin: 15px 0 40px 0; opacity: 0.9; }
-        #reset-btn {
-            background: white;
-            color: black;
-            border: none;
-            padding: 15px 45px;
+            padding: 20px;
             font-size: 1.3rem;
             font-weight: bold;
-            border-radius: 30px;
+            border-radius: 12px;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            transition: transform 0.1s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s ease, background-color 0.2s;
         }
-        #reset-btn:active {
-            transform: scale(0.95);
+        .menu-btn:active { transform: scale(0.98); }
+        .menu-btn:hover { background-color: #2563eb; }
+
+        /* מסך הסורק */
+        #scanner-screen { display: none; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; border: none !important; }
+        #reader button {
+            background-color: #2563eb; color: white; border: none; padding: 12px 24px;
+            font-size: 16px; border-radius: 8px; cursor: pointer; margin: 10px 0; font-weight: bold;
+        }
+        
+        /* כפתור החלפה מהירה בין פטורים בתחתית הסורק */
+        .switch-btn {
+            background-color: #f3f4f6; border: 2px solid #1e3a8a; color: #1e3a8a; padding: 12px 20px;
+            border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 20px; width: 100%;
+            font-size: 1rem; transition: background-color 0.2s;
+        }
+        .switch-btn:hover { background-color: #e0e7ff; }
+
+        /* מסך תוצאה מלא שיקפוץ בצבע */
+        #result-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
+            color: white; text-align: center;
+        }
+        #result-title { font-size: 3.5rem; margin: 0; font-weight: bold; }
+        #result-sub { font-size: 1.8rem; margin: 10px 0; opacity: 0.9; }
+        #result-code { font-size: 1.3rem; margin: 0 0 40px 0; opacity: 0.7; }
+        #reset-btn {
+            background: white; color: black; border: none; padding: 15px 45px;
+            font-size: 1.3rem; font-weight: bold; border-radius: 30px; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body>
 
-    <div id="container">
-        <h1>סורק פטורים מהיר</h1>
-        <div id="status-text">טוען נתונים מגוגל שיטס...</div>
+    <div id="menu-screen" class="card">
+        <h1>מערכת בדיקת פטורים</h1>
+        <button class="menu-btn" onclick="selectMode('beard')">בדיקת פטור זקן</button>
+        <button class="menu-btn" onclick="selectMode('hair')">בדיקת פטור שיער</button>
+    </div>
+
+    <div id="scanner-screen" class="card">
+        <h1 id="scanner-title">סורק</h1>
+        <div id="status-text" class="status-text">טוען נתונים...</div>
         <div id="reader"></div>
+        
+        <button id="quick-switch-btn" class="switch-btn" onclick="toggleMode()">מעבר לבדיקה שנייה...</button>
     </div>
 
     <div id="result-screen">
         <h2 id="result-title"></h2>
+        <div id="result-sub"></div>
         <p id="result-code"></p>
         <button id="reset-btn" onclick="resetScanner()">סרוק כרטיס הבא</button>
     </div>
 
     <script>
         // ========================================================
-        // ⚠️ אל תשכח להדביק שוב את קישור ה-CSV שלך מגוגל שיטס כאן:
+        // ⚠️ הדבק כאן את שני הקישורים השונים שלך מגוגל שיטס:
         // ========================================================
-        const googleSheetCsvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
+        const urlBeardSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
+        const urlHairSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoy_KcjTmaxtQGXGd00oe1rtF_QI_oXjhgeI-UAkQeskU8Ujw13ehzjxUoqM_XTFczg4EdRwf9-4A8/pub?output=csv"; 
         
         let validBarcodes = [];
         let html5QrcodeScanner;
+        let currentMode = ''; // 'beard' או 'hair'
 
-        // 1. משיכת הנתונים מגוגל שיטס ברגע שהדף עולה
-        async function loadBarcodes() {
-            if(googleSheetCsvUrl === "הדבק_כאן_את_הקישור_שלך") {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את קישור ה-CSV בשורה 84 בקוד";
+        // פונקציה לבחירת סוג הפטור ומעבר לסורק
+        async function selectMode(mode) {
+            currentMode = mode;
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('scanner-screen').style.display = 'block';
+            
+            updateUiAndLoad();
+        }
+
+        // עדכון כותרות הממשק וטעינת הקובץ הנכון
+        async function updateUiAndLoad() {
+            const switchBtn = document.getElementById('quick-switch-btn');
+            
+            if (currentMode === 'beard') {
+                document.getElementById('scanner-title').innerText = "בדיקת פטור זקן";
+                switchBtn.innerText = "🔄 מעבר לבדיקת פטור שיער";
+                await loadBarcodes(urlBeardSheet);
+            } else if (currentMode === 'hair') {
+                document.getElementById('scanner-title').innerText = "בדיקת פטור שיער";
+                switchBtn.innerText = "🔄 מעבר לבדיקת פטור זקן";
+                await loadBarcodes(urlHairSheet);
+            }
+        }
+
+        // פונקציית החלפה מהירה בלחיצת כפתור בתחתית
+        async function toggleMode() {
+            // כיבוי הסורק הקיים כדי שלא יתקע את המצלמה
+            if (html5QrcodeScanner) {
+                await html5QrcodeScanner.clear().catch(err => console.log(err));
+            }
+            // החלפת המצב
+            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
+            validBarcodes = [];
+            
+            // טעינה מחדש של הקובץ השני והפעלת המצלמה
+            updateUiAndLoad();
+        }
+
+        // משיכת הנתונים מהקובץ
+        async function loadBarcodes(url) {
+            if(url.startsWith("הדבק_כאן")) {
+                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור המתאים בקוד (שורות 99-100)";
                 return;
             }
             try {
-                const response = await fetch(googleSheetCsvUrl);
+                document.getElementById('status-text').innerText = "מתחבר לבסיס הנתונים...";
+                const response = await fetch(url);
                 const data = await response.text();
                 
-                // הפיכת ה-CSV למערך של מספרים
                 validBarcodes = data.split(/\r?\n/)
                                     .map(line => line.trim())
                                     .filter(line => line.length > 0);
                 
-                // הסרת כותרת העמודה (Barcode) אם קיימת
                 if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
                     validBarcodes.shift();
                 }
@@ -134,7 +179,7 @@
             }
         }
 
-        // 2. הפעלת סורק הברקודים דרך המצלמה
+        // הפעלת המצלמה
         function startScanner() {
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 10, 
@@ -144,35 +189,37 @@
             html5QrcodeScanner.render(onScanSuccess);
         }
 
-        // 3. פענוח הברקוד והצגת התוצאה
+        // פענוח והצגת תוצאה (ירוק/אדום)
         function onScanSuccess(decodedText) {
             html5QrcodeScanner.clear();
 
             const cleanCode = decodedText.trim();
             const resultScreen = document.getElementById('result-screen');
             const resultTitle = document.getElementById('result-title');
+            const resultSub = document.getElementById('result-sub');
             const resultCode = document.getElementById('result-code');
 
-            // בדיקה האם המספר האישי שנסרק קיים ברשימה
+            const isType = (currentMode === 'beard') ? "פטור זקן" : "פטור שיער";
+
             if (validBarcodes.includes(cleanCode)) {
-                resultScreen.style.backgroundColor = "#22c55e"; 
+                resultScreen.style.backgroundColor = "#22c55e"; // ירוק
                 resultTitle.innerText = "פטור בתוקף";
+                resultSub.innerText = `מאושר: ${isType}`;
             } else {
-                resultScreen.style.backgroundColor = "#ef4444"; 
+                resultScreen.style.backgroundColor = "#ef4444"; // אדום
                 resultTitle.innerText = "ללא פטור";
+                resultSub.innerText = `לא נמצא ברשימת ${isType}`;
             }
 
             resultCode.innerText = `מספר כרטיס: ${cleanCode}`;
             resultScreen.style.display = 'flex';
         }
 
-        // 4. חזרה למצב סריקה לכרטיס הבא
+        // 🟢 חזרה לסריקה הבאה - נשאר באותו פטור בדיוק ובאותו מסך!
         function resetScanner() {
             document.getElementById('result-screen').style.display = 'none';
             startScanner();
         }
-
-        window.onload = loadBarcodes;
     </script>
 </body>
 </html>
