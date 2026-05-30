@@ -5,14 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת בדיקת פטורים</title>
     
-    <script>
-        // ========================================================
-        // ⚠️ הדבק כאן את שני הקישורים השונים שלך מגוגל שיטס:
-        // ========================================================
-        const urlBeardSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
-        const urlHairSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoy_KcjTmaxtQGXGd00oe1rtF_QI_oXjhgeI-UAkQeskU8Ujw13ehzjxUoqM_XTFczg4EdRwf9-4A8/pub?output=csv"; 
-    </script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <style>
         body {
@@ -87,15 +79,16 @@
             height: 38px;
             font-size: 1rem;
         }
-        .input-btn:hover { background-color: #2563eb; }
 
-        /* מסך הבית */
+        /* מסך הבית - כפתורים גדולים ונגישים */
         #menu-screen { display: flex; flex-direction: column; gap: 15px; }
         .menu-btn {
             background-color: #1e3a8a; color: white; border: none; padding: 20px;
             font-size: 1.3rem; font-weight: bold; border-radius: 12px; cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: opacity 0.2s;
         }
+        .menu-btn:active { opacity: 0.8; }
 
         /* מסך הסורק */
         #scanner-screen { display: none; }
@@ -151,7 +144,7 @@
             </div>
         </div>
 
-        <div id="status-text" class="status-text">טוען נתונים...</div>
+        <div id="status-text" class="status-text">מאתחל מערכת...</div>
         <div id="reader"></div>
         <button id="quick-switch-btn" class="switch-btn" onclick="toggleMode()">מעבר לבדיקה שנייה...</button>
     </div>
@@ -164,14 +157,182 @@
     </div>
 
     <script>
+        // ========================================================
+        // ⚠️ הקישורים שלך - הדבק אותם ממש כאן (שמור על המרכאות!)
+        // ========================================================
+        const urlBeardSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
+        const urlHairSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoy_KcjTmaxtQGXGd00oe1rtF_QI_oXjhgeI-UAkQeskU8Ujw13ehzjxUoqM_XTFczg4EdRwf9-4A8/pub?output=csv"; 
+        // ========================================================
+
         let validBarcodes = [];
         let html5QrCode = null;
         let currentMode = ''; 
         let isProcessing = false;
         let selectedCameraId = null;
 
-        // בחירת מצב התחלתי
+        // פונקציה לבחירת המצב - מוגנת מנפילות
         async function selectMode(mode) {
-            currentMode = mode;
-            document.getElementById('menu-screen').style.display = 'none';
-            document.getElementById('scanner-screen
+            try {
+                // 1. החלפת מסך מיידית ללא תלות בכלום
+                currentMode = mode;
+                document.getElementById('menu-screen').style.display = 'none';
+                document.getElementById('scanner-screen').style.display = 'block';
+                document.getElementById('status-text').innerText = "מבקש גישה למצלמה...";
+                
+                // 2. הפעלת מנועי המצלמה והנתונים
+                await getAndPopulateCameras();
+                await updateUiAndLoad();
+            } catch (err) {
+                console.error("שגיאה קריטית בטעינה:", err);
+                document.getElementById('status-text').innerText = "❌ שגיאה במערכת. רענן את הדף.";
+            }
+        }
+
+        function getAndPopulateCameras() {
+            return new Promise((resolve, reject) => {
+                Html5Qrcode.getCameras().then(cameras => {
+                    const selectEl = document.getElementById('camera-select');
+                    selectEl.innerHTML = ""; 
+
+                    if (cameras && cameras.length > 0) {
+                        cameras.forEach((camera, index) => {
+                            const option = document.createElement('option');
+                            option.value = camera.id;
+                            option.text = camera.label || `מצלמה ${index + 1}`;
+                            selectEl.appendChild(option);
+                        });
+                        
+                        selectEl.selectedIndex = cameras.length - 1;
+                        selectedCameraId = selectEl.value;
+                        
+                        startCamera(selectedCameraId).then(() => resolve()).catch(reject);
+                    } else {
+                        document.getElementById('status-text').innerText = "⚠️ לא נמצאו מצלמות";
+                        resolve();
+                    }
+                }).catch(err => {
+                    document.getElementById('status-text').innerText = "⚠️ הגישה למצלמה נחסמה";
+                    resolve();
+                });
+            });
+        }
+
+        function startCamera(cameraId) {
+            return new Promise((resolve, reject) => {
+                const config = { fps: 15, qrbox: { width: 280, height: 160 } };
+                if (html5QrCode) {
+                    html5QrCode.stop().then(() => {
+                        html5QrCode = new Html5Qrcode("reader");
+                        html5QrCode.start(cameraId, config, onScanSuccess).then(resolve).catch(reject);
+                    }).catch(() => {
+                        html5QrCode = new Html5Qrcode("reader");
+                        html5QrCode.start(cameraId, config, onScanSuccess).then(resolve).catch(reject);
+                    });
+                } else {
+                    html5QrCode = new Html5Qrcode("reader");
+                    html5QrCode.start(cameraId, config, onScanSuccess).then(resolve).catch(reject);
+                }
+            });
+        }
+
+        async function onCameraChange() {
+            try {
+                const selectEl = document.getElementById('camera-select');
+                selectedCameraId = selectEl.value;
+                document.getElementById('status-text').innerText = "מחליף מצלמה...";
+                await startCamera(selectedCameraId);
+                document.getElementById('status-text').innerText = "מוכן לסריקה!";
+            } catch (err) {
+                document.getElementById('status-text').innerText = "שגיאה בהחלפת מצלמה";
+            }
+        }
+
+        async function updateUiAndLoad() {
+            const switchBtn = document.getElementById('quick-switch-btn');
+            if (currentMode === 'beard') {
+                document.getElementById('scanner-title').innerText = "בדיקת פטור זקן";
+                switchBtn.innerText = "🔄 מעבר לבדיקת פטור שיער";
+                await loadData(urlBeardSheet);
+            } else {
+                document.getElementById('scanner-title').innerText = "בדיקת פטור שיער";
+                switchBtn.innerText = "🔄 מעבר לבדיקת פטור זקן";
+                await loadData(urlHairSheet);
+            }
+        }
+
+        async function loadData(url) {
+            if(!url || url.startsWith("הדבק_כאן")) {
+                document.getElementById('status-text').innerHTML = "⚠️ חסרים קישורים בשורות 188-189";
+                return;
+            }
+            try {
+                document.getElementById('status-text').innerText = "טוען נתונים...";
+                const response = await fetch(url);
+                const data = await response.text();
+                
+                validBarcodes = data.split(/\r?\n/)
+                                    .map(line => line.trim())
+                                    .filter(line => line.length > 0);
+                
+                if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
+                    validBarcodes.shift();
+                }
+                document.getElementById('status-text').innerText = `המערכת מוכנה! נטענו ${validBarcodes.length} פטורים.`;
+            } catch (error) {
+                document.getElementById('status-text').innerText = "❌ שגיאה בגישה לגוגל שיטס";
+            }
+        }
+
+        async function toggleMode() {
+            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
+            validBarcodes = [];
+            document.getElementById('manual-barcode').value = "";
+            await updateUiAndLoad();
+        }
+
+        function submitManualCode() {
+            const inputEl = document.getElementById('manual-barcode');
+            const code = inputEl.value.trim();
+            if (code.length === 0) return;
+            checkAndShowResult(code);
+        }
+
+        function onScanSuccess(decodedText) {
+            if (isProcessing) return;
+            isProcessing = true;
+            checkAndShowResult(decodedText);
+        }
+
+        function checkAndShowResult(rawCode) {
+            const cleanCode = rawCode.trim();
+            const resultScreen = document.getElementById('result-screen');
+            const resultTitle = document.getElementById('result-title');
+            const resultSub = document.getElementById('result-sub');
+            const resultCode = document.getElementById('result-code');
+
+            const isType = (currentMode === 'beard') ? "פטור זקן" : "פטור שיער";
+
+            if (validBarcodes.includes(cleanCode)) {
+                resultScreen.style.backgroundColor = "#22c55e"; 
+                resultTitle.innerText = "פטור בתוקף";
+                resultSub.innerText = `מאושר: ${isType}`;
+            } else {
+                resultScreen.style.backgroundColor = "#ef4444"; 
+                resultTitle.innerText = "ללא פטור";
+                resultSub.innerText = `לא נמצא ברשימת ${isType}`;
+            }
+
+            resultCode.innerText = `מספר שנבדק: ${cleanCode}`;
+            resultScreen.style.display = 'flex';
+        }
+
+        function resetScanner() {
+            document.getElementById('manual-barcode').value = "";
+            document.getElementById('result-screen').style.display = 'none';
+            setTimeout(() => {
+                isProcessing = false;
+            }, 800);
+        }
+    </script>
+</body>
+</html>
