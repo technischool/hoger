@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בדיקת סטטוס פטור</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f3f4f6;
+            transition: background-color 0.3s ease;
+        }
+        #container {
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1f2937; margin-bottom: 5px; font-size: 24px; }
+        #status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
+        #reader {
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            border: none !important;
+        }
+        /* עיצוב כפתורים מובנים של הספרייה */
+        #reader button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        /* מסך תוצאה מלא שיקפוץ בצבע */
+        #result-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+        }
+        #result-title { font-size: 3.5rem; margin: 0; font-weight: bold; }
+        #result-code { font-size: 1.5rem; margin: 15px 0 40px 0; opacity: 0.9; }
+        #reset-btn {
+            background: white;
+            color: black;
+            border: none;
+            padding: 15px 45px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.1s ease;
+        }
+        #reset-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h1>סורק פטורים מהיר</h1>
+        <div id="status-text">טוען נתונים מגוגל שיטס...</div>
+        <div id="reader"></div>
+    </div>
+
+    <div id="result-screen">
+        <h2 id="result-title"></h2>
+        <p id="result-code"></p>
+        <button id="reset-btn" onclick="resetScanner()">סרוק כרטיס הבא</button>
+    </div>
+
+    <script>
+        // ========================================================
+        // ⚠️ הדבק את קישור ה-CSV שלך מגוגל שיטס בין הגרשיים כאן למטה:
+        // ========================================================
+        const googleSheetCsvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
+        
+        let validBarcodes = [];
+        let html5QrcodeScanner;
+
+        // 1. משיכת הנתונים מגוגל שיטס ברגע שהדף עולה
+        async function loadBarcodes() {
+            if(googleSheetCsvUrl === "הדבק_כאן_את_הקישור_שלך") {
+                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את קישור ה-CSV בשורה 82 בקוד";
+                return;
+            }
+            try {
+                const response = await fetch(googleSheetCsvUrl);
+                const data = await response.text();
+                
+                // הפיכת ה-CSV למערך של מספרים (ניקוי רווחים, אנטרים ושורות ריקות)
+                validBarcodes = data.split(/\r?\n/)
+                                    .map(line => line.trim())
+                                    .filter(line => line.length > 0);
+                
+                // הסרת כותרת העמודה (Barcode) אם קיימת בשורה הראשונה
+                if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
+                    validBarcodes.shift();
+                }
+
+                document.getElementById('status-text').innerText = `המערכת מוכנה! נטענו ${validBarcodes.length} רשומות.`;
+                startScanner();
+            } catch (error) {
+                document.getElementById('status-text').innerText = "❌ שגיאה בסנכרון מול גוגל שיטס";
+                console.error(error);
+            }
+        }
+
+        // 2. הפעלת סורק הברקודים דרך המצלמה
+        function startScanner() {
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+                fps: 10, 
+                qrbox: { width: 280, height: 160 }, // מותאם לברקוד מלבני
+                rememberLastUsedCamera: true
+            });
+            html5QrcodeScanner.render(onScanSuccess);
+        }
+
+        // 3. פענוח הברקוד והצגת התוצאה
+        function onScanSuccess(decodedText) {
+            // עצירת המצלמה מיד כדי למנוע כפל סריקות ברקע
+            html5QrcodeScanner.clear();
+
+            const cleanCode = decodedText.trim();
+            const resultScreen = document.getElementById('result-screen');
+            const resultTitle = document.getElementById('result-title');
+            const resultCode = document.getElementById('result-code');
+
+            // בדיקה האם המספר האישי שנסרק קיים ברשימה שהורדה מהאקסל
+            if (validBarcodes.includes(cleanCode)) {
+                // נמצא ברשימה -> מסך ירוק מלא
+                resultScreen.style.backgroundColor = "#22c55e"; 
+                resultTitle.innerText = "פטור בתוקף";
+            } else {
+                // לא נמצא ברשימה -> מסך אדום מלא
+                resultScreen.style.backgroundColor = "#ef4444"; 
+                resultTitle.innerText = "ללא פטור";
+            }
+
+            resultCode.innerText = `מספר כרטיס: ${cleanCode}`;
+            resultScreen.style.display = 'flex';
+        }
+
+        // 4. חזרה למצב סריקה לכרטיס הבא
+        function resetScanner() {
+            document.getElementById('result-screen').style.display = 'none';
+            startScanner();
+        }
+
+        // טעינת המערכת אוטומטית בכניסה לדף
+        window.onload = loadBarcodes;
+    </script>
+</body>
+</html>
