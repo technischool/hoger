@@ -120,11 +120,6 @@
             document.getElementById('menu-screen').style.display = 'none';
             document.getElementById('scanner-screen').style.display = 'block';
             
-            await updateUiAndLoad();
-        }
-
-        // עדכון כותרות הממשק וטעינת הקובץ הנכון
-        async function updateUiAndLoad() {
             const switchBtn = document.getElementById('quick-switch-btn');
             
             if (currentMode === 'beard') {
@@ -138,35 +133,17 @@
             }
         }
 
-        // פונקציית החלפה מהירה בלחיצת כפתור בתחתית - מתוקנת למניעת השגיאה!
-        async function toggleMode() {
-            document.getElementById('status-text').innerText = "מכבה מצלמה קודמת...";
-            
-            // הגנה חזקה מפני שגיאות removeChild
-            if (html5QrcodeScanner) {
-                try {
-                    await html5QrcodeScanner.clear();
-                } catch (err) {
-                    console.log("התעלם משגיאת ניקוי פנימית:", err);
-                }
-                html5QrcodeScanner = null;
-            }
-            
-            // איפוס ידני של אלמנט ה-HTML של הreader כדי לנקות שאריות תקועות
-            document.getElementById('reader').innerHTML = "";
-            
-            // החלפת המצב
-            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
-            validBarcodes = [];
-            
-            // טעינה מחדש של הקובץ השני והפעלת המצלמה
-            await updateUiAndLoad();
+        // פונקציית החלפה מהירה - מרעננת את העמוד בצורה נקייה ומאובטחת
+        function toggleMode() {
+            const nextMode = (currentMode === 'beard') ? 'hair' : 'beard';
+            // טעינה מחדש של האתר עם סימון קטן בשורת הכתובת
+            window.location.href = window.location.pathname + "?mode=" + nextMode;
         }
 
         // משיכת הנתונים מהקובץ
         async function loadBarcodes(url) {
             if(url.startsWith("הדבק_כאן")) {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור המתאים בקוד (שורות 99-100)";
+                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור המתאים בקוד (שורות 95-96)";
                 return;
             }
             try {
@@ -190,28 +167,19 @@
             }
         }
 
-        // הפעלת המצלמה - כולל יצירה מחדש נקייה
+        // הפעלת המצלמה
         function startScanner() {
-            // תמיד ניצור אובייקט סורק חדש לחלוטין כדי למנוע זיכרון תקוע
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 10, 
                 qrbox: { width: 280, height: 160 },
                 rememberLastUsedCamera: true
             });
-            html5QrcodeScanner.render(onScanSuccess, onScanError);
-        }
-
-        function onScanError(err) {
-            // פונקציית דמי ריקה כדי למנוע הצפת שגיאות קטנות בקונסול בזמן שהמצלמה מחפשת ברקוד
+            html5QrcodeScanner.render(onScanSuccess, (err) => {});
         }
 
         // פענוח והצגת תוצאה (ירוק/אדום)
-        async function onScanSuccess(decodedText) {
-            if (html5QrcodeScanner) {
-                try { await html5QrcodeScanner.clear(); } catch(e){}
-                html5QrcodeScanner = null;
-            }
-
+        function onScanSuccess(decodedText) {
+            // כאן אנחנו לא מכבים את הסורק פיזית כדי לא לייצר שגיאה, אלא פשוט מקפיצים את המסך מעליו
             const cleanCode = decodedText.trim();
             const resultScreen = document.getElementById('result-screen');
             const resultTitle = document.getElementById('result-title');
@@ -234,11 +202,19 @@
             resultScreen.style.display = 'flex';
         }
 
-        // חזרה לסריקה הבאה - נשאר באותו פטור בדיוק ובאותו מסך
+        // חזרה לסריקה הבאה - פשוט מסתיר את המסך הצבעוני, המצלמה כבר שם ומחכה
         function resetScanner() {
-            document.getElementById('reader').innerHTML = ""; // ניקוי אלמנט
             document.getElementById('result-screen').style.display = 'none';
-            startScanner();
+        }
+
+        // בדיקה אוטומטית ברענון: האם המשתמש עבר פטור
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const modeParam = urlParams.get('mode');
+            
+            if (modeParam === 'beard' || modeParam === 'hair') {
+                selectMode(modeParam);
+            }
         }
     </script>
 </body>
