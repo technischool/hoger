@@ -30,6 +30,28 @@
         h1 { color: #1f2937; margin-bottom: 25px; font-size: 26px; }
         .status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; font-weight: bold; }
         
+        /* עיצוב בחירת המצלמות */
+        .camera-select-container {
+            margin-bottom: 15px;
+            text-align: right;
+        }
+        .camera-select-container label {
+            font-size: 13px;
+            color: #4b5563;
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .cam-select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #1e3a8a;
+            font-size: 1rem;
+            background-color: #f9fafb;
+            color: #1f2937;
+        }
+
         /* מסך הבית */
         #menu-screen { display: flex; flex-direction: column; gap: 15px; }
         .menu-btn {
@@ -41,8 +63,6 @@
         /* מסך הסורק */
         #scanner-screen { display: none; }
         #reader { width: 100%; border-radius: 10px; overflow: hidden; border: none !important; }
-        
-        /* הסתרת כפתורים מיותרים של הספרייה */
         #reader button { display: none !important; }
 
         /* כפתור החלפה מהירה בתחתית */
@@ -52,7 +72,7 @@
             font-size: 1rem;
         }
 
-        /* מסך תוצאה מלא שיקפוץ מעל */
+        /* מסך תוצאה מלא */
         #result-screen {
             display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
@@ -78,6 +98,12 @@
 
     <div id="scanner-screen" class="card">
         <h1 id="scanner-title">סורק</h1>
+        
+        <div class="camera-select-container">
+            <label for="camera-select">🎥 בחר מצלמה אחורית חדה:</label>
+            <select id="camera-select" class="cam-select" onchange="onCameraChange()"></select>
+        </div>
+
         <div id="status-text" class="status-text">טוען נתונים...</div>
         <div id="reader"></div>
         <button id="quick-switch-btn" class="switch-btn" onclick="toggleMode()">מעבר לבדיקה שנייה...</button>
@@ -101,6 +127,7 @@
         let html5QrCode = null;
         let currentMode = ''; 
         let isProcessing = false;
+        let selectedCameraId = null;
 
         // בחירת מצב התחלתי
         async function selectMode(mode) {
@@ -108,109 +135,60 @@
             document.getElementById('menu-screen').style.display = 'none';
             document.getElementById('scanner-screen').style.display = 'block';
             
-            // הפעלת המצלמה פעם אחת בלבד כאן
-            await startCamera();
+            // גילוי המצלמות הקיימות במכשיר והפעלת הראשונה ברשימה
+            await getAndPopulateCameras();
             await updateUiAndLoad();
         }
 
-        // החלפת רשימות ברקע בלי לגעת במצלמה
-        async function updateUiAndLoad() {
-            const switchBtn = document.getElementById('quick-switch-btn');
-            if (currentMode === 'beard') {
-                document.getElementById('scanner-title').innerText = "בדיקת פטור זקן";
-                switchBtn.innerText = "🔄 מעבר לבדיקת פטור שיער";
-                await loadData(urlBeardSheet);
-            } else {
-                document.getElementById('scanner-title').innerText = "בדיקת פטור שיער";
-                switchBtn.innerText = "🔄 מעבר לבדיקת פטור זקן";
-                await loadData(urlHairSheet);
-            }
-        }
-
-        // טעינת הנתונים מגוגל שיטס
-        async function loadData(url) {
-            if(url.startsWith("הדבק_כאן")) {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור בקוד (שורות 96-97)";
-                return;
-            }
-            try {
-                document.getElementById('status-text').innerText = "מעדכן רשימת ברקודים...";
-                const response = await fetch(url);
-                const data = await response.text();
-                
-                validBarcodes = data.split(/\r?\n/)
-                                    .map(line => line.trim())
-                                    .filter(line => line.length > 0);
-                
-                if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
-                    validBarcodes.shift();
-                }
-                document.getElementById('status-text').innerText = `מוכן! נטענו ${validBarcodes.length} רשומות קבילות.`;
-            } catch (error) {
-                document.getElementById('status-text').innerText = "❌ שגיאה בסנכרון מול גוגל שיטס";
-                console.error(error);
-            }
-        }
-
-        // הפעלת המצלמה בצורה אמינה עם הגדרה ישירה למצלמה אחורית
-        function startCamera() {
+        // גילוי מצלמות והזנתן לתפריט הבחירה
+        function getAndPopulateCameras() {
             return new Promise((resolve) => {
-                html5QrCode = new Html5Qrcode("reader");
-                const config = { fps: 15, qrbox: { width: 280, height: 160 } };
-                
-                // כפיית מצלמה אחורית בלבד סוגר את תקלות הזיהוי
-                html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
-                    .then(() => resolve())
-                    .catch((err) => {
-                        document.getElementById('status-text').innerText = "⚠️ שגיאה בגישה למצלמה. אנא ודא שאישרת הרשאות.";
+                Html5Qrcode.getCameras().then(cameras => {
+                    const selectEl = document.getElementById('camera-select');
+                    selectEl.innerHTML = ""; // ניקוי
+
+                    if (cameras && cameras.length > 0) {
+                        // סינון המצלמות ומילוי התפריט
+                        cameras.forEach((camera, index) => {
+                            const option = document.createElement('option');
+                            option.value = camera.id;
+                            option.text = camera.label || `מצלמה ${index + 1}`;
+                            selectEl.appendChild(option);
+                        });
+                        
+                        // בחירת המצלמה האחרונה בדרך כלל היא הראשית האחורית בטלפונים
+                        selectEl.selectedIndex = cameras.length - 1;
+                        selectedCameraId = selectEl.value;
+                        
+                        startCamera(selectedCameraId).then(() => resolve());
+                    } else {
+                        document.getElementById('status-text').innerText = "⚠️ לא נמצאו מצלמות זמינות";
                         resolve();
-                    });
+                    }
+                }).catch(err => {
+                    console.error("שגיאה בגילוי מצלמות:", err);
+                    document.getElementById('status-text').innerText = "⚠️ שגיאה בהרשאות המצלמה";
+                    resolve();
+                });
             });
         }
 
-        // מעבר מהיר - משנה רק את הזיכרון, המצלמה ממשיכה לרוץ חלק
-        async function toggleMode() {
-            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
-            validBarcodes = [];
-            await updateUiAndLoad();
-        }
-
-        // פענוח הברקוד
-        function onScanSuccess(decodedText) {
-            // אם המערכת כרגע מציגה תוצאה, תתעלם מסריקות נוספות ברקע
-            if (isProcessing) return;
-            isProcessing = true;
-
-            const cleanCode = decodedText.trim();
-            const resultScreen = document.getElementById('result-screen');
-            const resultTitle = document.getElementById('result-title');
-            const resultSub = document.getElementById('result-sub');
-            const resultCode = document.getElementById('result-code');
-
-            const isType = (currentMode === 'beard') ? "פטור זקן" : "פטור שיער";
-
-            if (validBarcodes.includes(cleanCode)) {
-                resultScreen.style.backgroundColor = "#22c55e"; 
-                resultTitle.innerText = "פטור בתוקף";
-                resultSub.innerText = `מאושר: ${isType}`;
+        // הפעלת מצלמה ספציפית לפי ה-ID שנבחר
+        function startCamera(cameraId) {
+            if (html5QrCode) {
+                // אם כבר יש סורק רץ, נכבה אותו קודם בצורה בטוחה
+                return html5QrCode.stop().then(() => {
+                    html5QrCode = new Html5Qrcode("reader");
+                    return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
+                }).catch(() => {
+                    html5QrCode = new Html5Qrcode("reader");
+                    return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
+                });
             } else {
-                resultScreen.style.backgroundColor = "#ef4444"; 
-                resultTitle.innerText = "ללא פטור";
-                resultSub.innerText = `לא נמצא ברשימת ${isType}`;
+                html5QrCode = new Html5Qrcode("reader");
+                return html5QrCode.start(cameraId, { fps: 15, qrbox: { width: 280, height: 160 } }, onScanSuccess);
             }
-
-            resultCode.innerText = `מספר כרטיס: ${cleanCode}`;
-            resultScreen.style.display = 'flex';
         }
 
-        // חזרה לסריקה הבאה - מיידית, המצלמה לא עשתה restart
-        function resetScanner() {
-            document.getElementById('result-screen').style.display = 'none';
-            // השהיה קטנה רק כדי שהיוזר יספיק להזיז את היד מהכרטיס הקודם
-            setTimeout(() => {
-                isProcessing = false;
-            }, 800);
-        }
-    </script>
-</body>
-</html>
+        // אירוע שינוי מצלמה ידני מהתפריט
+        async function onCameraChange() {
