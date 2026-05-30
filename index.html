@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת בדיקת פטורים</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -16,7 +16,7 @@
             justify-content: center;
             min-height: 100vh;
             background-color: #0a192f; 
-            transition: background-color 0.3s ease;
+            overflow-x: hidden;
         }
         .card {
             width: 90%;
@@ -29,42 +29,39 @@
             box-sizing: border-box;
         }
         h1 { color: #1f2937; margin-bottom: 25px; font-size: 26px; }
-        .status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
+        .status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; font-weight: bold; }
         
-        /* עיצוב מסך הבית - כפתורי בחירה גדולים */
+        /* מסך הבית */
         #menu-screen { display: flex; flex-direction: column; gap: 15px; }
         .menu-btn {
-            background-color: #1e3a8a;
-            color: white;
-            border: none;
-            padding: 20px;
-            font-size: 1.3rem;
-            font-weight: bold;
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.1s ease, background-color 0.2s;
+            background-color: #1e3a8a; color: white; border: none; padding: 20px;
+            font-size: 1.3rem; font-weight: bold; border-radius: 12px; cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: background-color 0.2s;
         }
-        .menu-btn:active { transform: scale(0.98); }
         .menu-btn:hover { background-color: #2563eb; }
 
         /* מסך הסורק */
         #scanner-screen { display: none; }
-        #reader { width: 100%; border-radius: 10px; overflow: hidden; border: none !important; }
-        #reader button {
-            background-color: #2563eb; color: white; border: none; padding: 12px 24px;
-            font-size: 16px; border-radius: 8px; cursor: pointer; margin: 10px 0; font-weight: bold;
+        .video-container {
+            width: 100%;
+            max-width: 400px;
+            height: 250px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            position: relative;
         }
+        video { width: 100%; height: 100%; object-fit: cover; }
         
-        /* כפתור החלפה מהירה בין פטורים בתחתית הסורק */
+        /* כפתור החלפה מהירה */
         .switch-btn {
             background-color: #f3f4f6; border: 2px solid #1e3a8a; color: #1e3a8a; padding: 12px 20px;
             border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 20px; width: 100%;
-            font-size: 1rem; transition: background-color 0.2s;
+            font-size: 1rem;
         }
-        .switch-btn:hover { background-color: #e0e7ff; }
 
-        /* מסך תוצאה מלא שיקפוץ בצבע */
+        /* מסך תוצאה מלא */
         #result-screen {
             display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
@@ -91,8 +88,9 @@
     <div id="scanner-screen" class="card">
         <h1 id="scanner-title">סורק</h1>
         <div id="status-text" class="status-text">טוען נתונים...</div>
-        <div id="reader"></div>
-        
+        <div class="video-container">
+            <video id="video"></video>
+        </div>
         <button id="quick-switch-btn" class="switch-btn" onclick="toggleMode()">מעבר לבדיקה שנייה...</button>
     </div>
 
@@ -111,39 +109,39 @@
         const urlHairSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoy_KcjTmaxtQGXGd00oe1rtF_QI_oXjhgeI-UAkQeskU8Ujw13ehzjxUoqM_XTFczg4EdRwf9-4A8/pub?output=csv"; 
         
         let validBarcodes = [];
-        let html5QrcodeScanner = null;
+        let codeReader = null;
         let currentMode = ''; 
+        let isScanning = false;
 
-        // פונקציה לבחירת סוג הפטור ומעבר לסורק
-        async function selectMode(mode) {
+        // אתחול קורא הברקודים של ZXing
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+        // בחירת מצב ראשוני
+        function selectMode(mode) {
             currentMode = mode;
             document.getElementById('menu-screen').style.display = 'none';
             document.getElementById('scanner-screen').style.display = 'block';
-            
+            updateUiAndLoad();
+        }
+
+        // עדכון טקסטים וטעינת הקובץ הנכון
+        function updateUiAndLoad() {
             const switchBtn = document.getElementById('quick-switch-btn');
-            
             if (currentMode === 'beard') {
                 document.getElementById('scanner-title').innerText = "בדיקת פטור זקן";
                 switchBtn.innerText = "🔄 מעבר לבדיקת פטור שיער";
-                await loadBarcodes(urlBeardSheet);
-            } else if (currentMode === 'hair') {
+                loadData(urlBeardSheet);
+            } else {
                 document.getElementById('scanner-title').innerText = "בדיקת פטור שיער";
                 switchBtn.innerText = "🔄 מעבר לבדיקת פטור זקן";
-                await loadBarcodes(urlHairSheet);
+                loadData(urlHairSheet);
             }
         }
 
-        // פונקציית החלפה מהירה - מרעננת את העמוד בצורה נקייה ומאובטחת
-        function toggleMode() {
-            const nextMode = (currentMode === 'beard') ? 'hair' : 'beard';
-            // טעינה מחדש של האתר עם סימון קטן בשורת הכתובת
-            window.location.href = window.location.pathname + "?mode=" + nextMode;
-        }
-
-        // משיכת הנתונים מהקובץ
-        async function loadBarcodes(url) {
+        // טעינת רשימת הברקודים מגוגל שיטס
+        async function loadData(url) {
             if(url.startsWith("הדבק_כאן")) {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור המתאים בקוד (שורות 95-96)";
+                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את הקישור בקוד (שורות 95-96)";
                 return;
             }
             try {
@@ -160,27 +158,39 @@
                 }
 
                 document.getElementById('status-text').innerText = `המערכת מוכנה! נטענו ${validBarcodes.length} רשומות.`;
-                startScanner();
+                
+                if (!isScanning) {
+                    startCamera();
+                }
             } catch (error) {
                 document.getElementById('status-text').innerText = "❌ שגיאה בסנכרון מול גוגל שיטס";
                 console.error(error);
             }
         }
 
-        // הפעלת המצלמה
-        function startScanner() {
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-                fps: 10, 
-                qrbox: { width: 280, height: 160 },
-                rememberLastUsedCamera: true
+        // הפעלת המצלמה בצורה יציבה
+        function startCamera() {
+            isScanning = true;
+            // הספרייה מפעילה את המצלמה האחורית אוטומטית ומחפשת ברקודים ברצף
+            codeReader.decodeFromVideoDevice(undefined, 'video', (result, err) => {
+                if (result && isScanning) {
+                    // ברגע שנמצא ברקוד - עוצרים זמנית את זיהוי ההמשך
+                    isScanning = false;
+                    onScanSuccess(result.text);
+                }
             });
-            html5QrcodeScanner.render(onScanSuccess, (err) => {});
         }
 
-        // פענוח והצגת תוצאה (ירוק/אדום)
-        function onScanSuccess(decodedText) {
-            // כאן אנחנו לא מכבים את הסורק פיזית כדי לא לייצר שגיאה, אלא פשוט מקפיצים את המסך מעליו
-            const cleanCode = decodedText.trim();
+        // מעבר מהיר בלייב בין הפטורים (בלי רענון דף ובלי שום שגיאה קוד)
+        function toggleMode() {
+            currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
+            validBarcodes = [];
+            updateUiAndLoad();
+        }
+
+        // הצגת תוצאה (ירוק/אדום)
+        function onScanSuccess(code) {
+            const cleanCode = code.trim();
             const resultScreen = document.getElementById('result-screen');
             const resultTitle = document.getElementById('result-title');
             const resultSub = document.getElementById('result-sub');
@@ -202,19 +212,13 @@
             resultScreen.style.display = 'flex';
         }
 
-        // חזרה לסריקה הבאה - פשוט מסתיר את המסך הצבעוני, המצלמה כבר שם ומחכה
+        // חזרה לסריקה הבאה - מיידי, בלי להדליק מחדש את המצלמה
         function resetScanner() {
             document.getElementById('result-screen').style.display = 'none';
-        }
-
-        // בדיקה אוטומטית ברענון: האם המשתמש עבר פטור
-        window.onload = function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const modeParam = urlParams.get('mode');
-            
-            if (modeParam === 'beard' || modeParam === 'hair') {
-                selectMode(modeParam);
-            }
+            // פתיחת הנעילה לסריקה הבאה
+            setTimeout(() => {
+                isScanning = true;
+            }, 500); // השהייה של חצי שנייה כדי שהיוזר יספיק להזיז את הכרטיס הקודם
         }
     </script>
 </body>
