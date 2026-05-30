@@ -15,17 +15,19 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background-color: #f3f4f6;
+            /* 🔵 שינוי צבע הרקע הכללי לכחול נייבי עמוק */
+            background-color: #0a192f; 
             transition: background-color 0.3s ease;
         }
         #container {
             width: 90%;
             max-width: 500px;
             text-align: center;
+            /* ⚪ החלונית המרכזית נשארת לבנה */
             background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 30px 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
         h1 { color: #1f2937; margin-bottom: 5px; font-size: 24px; }
         #status-text { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
@@ -97,7 +99,7 @@
 
     <script>
         // ========================================================
-        // ⚠️ הדבק את קישור ה-CSV שלך מגוגל שיטס בין הגרשיים כאן למטה:
+        // ⚠️ אל תשכח להדביק שוב את קישור ה-CSV שלך מגוגל שיטס כאן:
         // ========================================================
         const googleSheetCsvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQrdgt4ZneC376JbsyxK4aXb_5dmq67zJWZo96WTZ2pKW8HV7eLPXn2a5B8KMmiHAjoaGV4p-U10YCr/pub?output=csv"; 
         
@@ -107,19 +109,19 @@
         // 1. משיכת הנתונים מגוגל שיטס ברגע שהדף עולה
         async function loadBarcodes() {
             if(googleSheetCsvUrl === "הדבק_כאן_את_הקישור_שלך") {
-                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את קישור ה-CSV בשורה 82 בקוד";
+                document.getElementById('status-text').innerHTML = "⚠️ יש להדביק את קישור ה-CSV בשורה 84 בקוד";
                 return;
             }
             try {
                 const response = await fetch(googleSheetCsvUrl);
                 const data = await response.text();
                 
-                // הפיכת ה-CSV למערך של מספרים (ניקוי רווחים, אנטרים ושורות ריקות)
+                // הפיכת ה-CSV למערך של מספרים
                 validBarcodes = data.split(/\r?\n/)
                                     .map(line => line.trim())
                                     .filter(line => line.length > 0);
                 
-                // הסרת כותרת העמודה (Barcode) אם קיימת בשורה הראשונה
+                // הסרת כותרת העמודה (Barcode) אם קיימת
                 if(validBarcodes[0] && validBarcodes[0].toLowerCase() === 'barcode') {
                     validBarcodes.shift();
                 }
@@ -136,7 +138,7 @@
         function startScanner() {
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 10, 
-                qrbox: { width: 280, height: 160 }, // מותאם לברקוד מלבני
+                qrbox: { width: 280, height: 160 },
                 rememberLastUsedCamera: true
             });
             html5QrcodeScanner.render(onScanSuccess);
@@ -144,7 +146,6 @@
 
         // 3. פענוח הברקוד והצגת התוצאה
         function onScanSuccess(decodedText) {
-            // עצירת המצלמה מיד כדי למנוע כפל סריקות ברקע
             html5QrcodeScanner.clear();
 
             const cleanCode = decodedText.trim();
@@ -152,13 +153,11 @@
             const resultTitle = document.getElementById('result-title');
             const resultCode = document.getElementById('result-code');
 
-            // בדיקה האם המספר האישי שנסרק קיים ברשימה שהורדה מהאקסל
+            // בדיקה האם המספר האישי שנסרק קיים ברשימה
             if (validBarcodes.includes(cleanCode)) {
-                // נמצא ברשימה -> מסך ירוק מלא
                 resultScreen.style.backgroundColor = "#22c55e"; 
                 resultTitle.innerText = "פטור בתוקף";
             } else {
-                // לא נמצא ברשימה -> מסך אדום מלא
                 resultScreen.style.backgroundColor = "#ef4444"; 
                 resultTitle.innerText = "ללא פטור";
             }
@@ -173,7 +172,6 @@
             startScanner();
         }
 
-        // טעינת המערכת אוטומטית בכניסה לדף
         window.onload = loadBarcodes;
     </script>
 </body>
