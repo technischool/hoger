@@ -111,8 +111,8 @@
         const urlHairSheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoy_KcjTmaxtQGXGd00oe1rtF_QI_oXjhgeI-UAkQeskU8Ujw13ehzjxUoqM_XTFczg4EdRwf9-4A8/pub?output=csv"; 
         
         let validBarcodes = [];
-        let html5QrcodeScanner;
-        let currentMode = ''; // 'beard' או 'hair'
+        let html5QrcodeScanner = null;
+        let currentMode = ''; 
 
         // פונקציה לבחירת סוג הפטור ומעבר לסורק
         async function selectMode(mode) {
@@ -120,7 +120,7 @@
             document.getElementById('menu-screen').style.display = 'none';
             document.getElementById('scanner-screen').style.display = 'block';
             
-            updateUiAndLoad();
+            await updateUiAndLoad();
         }
 
         // עדכון כותרות הממשק וטעינת הקובץ הנכון
@@ -138,18 +138,29 @@
             }
         }
 
-        // פונקציית החלפה מהירה בלחיצת כפתור בתחתית
+        // פונקציית החלפה מהירה בלחיצת כפתור בתחתית - מתוקנת למניעת השגיאה!
         async function toggleMode() {
-            // כיבוי הסורק הקיים כדי שלא יתקע את המצלמה
+            document.getElementById('status-text').innerText = "מכבה מצלמה קודמת...";
+            
+            // הגנה חזקה מפני שגיאות removeChild
             if (html5QrcodeScanner) {
-                await html5QrcodeScanner.clear().catch(err => console.log(err));
+                try {
+                    await html5QrcodeScanner.clear();
+                } catch (err) {
+                    console.log("התעלם משגיאת ניקוי פנימית:", err);
+                }
+                html5QrcodeScanner = null;
             }
+            
+            // איפוס ידני של אלמנט ה-HTML של הreader כדי לנקות שאריות תקועות
+            document.getElementById('reader').innerHTML = "";
+            
             // החלפת המצב
             currentMode = (currentMode === 'beard') ? 'hair' : 'beard';
             validBarcodes = [];
             
             // טעינה מחדש של הקובץ השני והפעלת המצלמה
-            updateUiAndLoad();
+            await updateUiAndLoad();
         }
 
         // משיכת הנתונים מהקובץ
@@ -179,19 +190,27 @@
             }
         }
 
-        // הפעלת המצלמה
+        // הפעלת המצלמה - כולל יצירה מחדש נקייה
         function startScanner() {
+            // תמיד ניצור אובייקט סורק חדש לחלוטין כדי למנוע זיכרון תקוע
             html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
                 fps: 10, 
                 qrbox: { width: 280, height: 160 },
                 rememberLastUsedCamera: true
             });
-            html5QrcodeScanner.render(onScanSuccess);
+            html5QrcodeScanner.render(onScanSuccess, onScanError);
+        }
+
+        function onScanError(err) {
+            // פונקציית דמי ריקה כדי למנוע הצפת שגיאות קטנות בקונסול בזמן שהמצלמה מחפשת ברקוד
         }
 
         // פענוח והצגת תוצאה (ירוק/אדום)
-        function onScanSuccess(decodedText) {
-            html5QrcodeScanner.clear();
+        async function onScanSuccess(decodedText) {
+            if (html5QrcodeScanner) {
+                try { await html5QrcodeScanner.clear(); } catch(e){}
+                html5QrcodeScanner = null;
+            }
 
             const cleanCode = decodedText.trim();
             const resultScreen = document.getElementById('result-screen');
@@ -202,11 +221,11 @@
             const isType = (currentMode === 'beard') ? "פטור זקן" : "פטור שיער";
 
             if (validBarcodes.includes(cleanCode)) {
-                resultScreen.style.backgroundColor = "#22c55e"; // ירוק
+                resultScreen.style.backgroundColor = "#22c55e"; 
                 resultTitle.innerText = "פטור בתוקף";
                 resultSub.innerText = `מאושר: ${isType}`;
             } else {
-                resultScreen.style.backgroundColor = "#ef4444"; // אדום
+                resultScreen.style.backgroundColor = "#ef4444"; 
                 resultTitle.innerText = "ללא פטור";
                 resultSub.innerText = `לא נמצא ברשימת ${isType}`;
             }
@@ -215,8 +234,9 @@
             resultScreen.style.display = 'flex';
         }
 
-        // 🟢 חזרה לסריקה הבאה - נשאר באותו פטור בדיוק ובאותו מסך!
+        // חזרה לסריקה הבאה - נשאר באותו פטור בדיוק ובאותו מסך
         function resetScanner() {
+            document.getElementById('reader').innerHTML = ""; // ניקוי אלמנט
             document.getElementById('result-screen').style.display = 'none';
             startScanner();
         }
