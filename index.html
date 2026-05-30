@@ -36,7 +36,7 @@
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
-            align-items: center;
+            align-items: flex-start; /* שומר על יישור עליון כדי שההערה לא תעקם את השורה */
             justify-content: space-between;
         }
         .control-item {
@@ -78,6 +78,14 @@
             font-weight: bold;
             height: 38px;
             font-size: 1rem;
+        }
+        
+        /* הערה קטנה מתחת להזנה הידנית */
+        .input-note {
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 4px;
+            font-weight: normal;
         }
 
         /* מסך הבית - כפתורים גדולים ונגישים */
@@ -141,6 +149,7 @@
                     <input type="tel" id="manual-barcode" class="manual-input" placeholder="מ.א / קוד" pattern="[0-9]*">
                     <button class="input-btn" onclick="submitManualCode()">➔</button>
                 </div>
+                <div class="input-note">* חובה להוסיף 0 לפני מס' אישי</div>
             </div>
         </div>
 
@@ -170,16 +179,13 @@
         let isProcessing = false;
         let selectedCameraId = null;
 
-        // פונקציה לבחירת המצב - מוגנת מנפילות
         async function selectMode(mode) {
             try {
-                // 1. החלפת מסך מיידית ללא תלות בכלום
                 currentMode = mode;
                 document.getElementById('menu-screen').style.display = 'none';
                 document.getElementById('scanner-screen').style.display = 'block';
                 document.getElementById('status-text').innerText = "מבקש גישה למצלמה...";
                 
-                // 2. הפעלת מנועי המצלמה והנתונים
                 await getAndPopulateCameras();
                 await updateUiAndLoad();
             } catch (err) {
